@@ -1021,12 +1021,29 @@ export const MediaAnnotator = () => {
         </ListItem>
     );
 
+    const BrowserWarning = () => {
+        // Check if the browser is Chrome
+        const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+
+        return (
+            !isChrome && (
+                <DialogTitle variant="h4" textAlign="center" sx={{ color: "red" }}>
+                    Best when opened in Chrome
+                </DialogTitle>
+            )
+        );
+    };
+
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
             <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', color: 'text.primary' }}>
                 {showUsernameModal && (
                     <Dialog open={showUsernameModal} onClose={() => setShowUsernameModal(false)}>
+                        <DialogTitle textAlign="center" variant="h4">Ms Media Reviewer</DialogTitle>
+                        <BrowserWarning />
+                        <DialogTitle textAlign="center" variant="h4"sx={{color: 'red'}}>Important</DialogTitle>
+                        <DialogTitle>If project doesn't load the latest comments automatically after a restart, comment files and backups will be stored/saved in the downloads folder, import them manually if needed</DialogTitle>
                         <DialogTitle>Enter Your Name</DialogTitle>
                         <DialogContent>
                             <TextField

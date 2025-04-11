@@ -9,3 +9,24 @@ write the WHOLE UPDATED CODE please ensuring you don't break anything.
 If a comment hast `DD` (don't delete) please don't delete it
 IT'S IMPERATIVE YOU WRITE THE WHOLE UPDATED CODE, BEFORE STARTING WRITING ANYTHING PLEASE CONFIRM ME YOU'LL WRITE THE WHOLE UPDATED CODE WITHOUT SKIPPING A SINGLE LINE
 I DON'T WANT ANY `...REST OF THE CODE` i WANT ALL THE UPDATED CODE
+
+
+
+    const BrowserWarning = () => {
+        // Check if the browser is Chrome
+        const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+
+        return (
+            !isChrome && (
+                <DialogTitle variant="h4" textAlign="center" sx={{ color: "red" }}>
+                    Best when opened in Chrome
+                </DialogTitle>
+            )
+        );
+    };
+
+
+                        <DialogTitle textAlign="center" variant="h4">Ms Media Reviewer</DialogTitle>
+                        <BrowserWarning />
+                        <DialogTitle textAlign="center" variant="h4"sx={{color: 'red'}}>Important</DialogTitle>
+                        <DialogTitle>If project doesn't load the latest comments automatically after a restart, comment files and backups will be stored/saved in the downloads folder, import them manually if needed</DialogTitle>
