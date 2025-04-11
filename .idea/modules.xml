@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/ms-reviewer.iml" filepath="$PROJECT_DIR$/.idea/ms-reviewer.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/MsMediaReviewer.iml" filepath="$PROJECT_DIR$/.idea/MsMediaReviewer.iml" />
     </modules>
   </component>
 </project>

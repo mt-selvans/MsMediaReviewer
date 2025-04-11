@@ -30,3 +30,6 @@ I DON'T WANT ANY `...REST OF THE CODE` i WANT ALL THE UPDATED CODE
                         <BrowserWarning />
                         <DialogTitle textAlign="center" variant="h4"sx={{color: 'red'}}>Important</DialogTitle>
                         <DialogTitle>If project doesn't load the latest comments automatically after a restart, comment files and backups will be stored/saved in the downloads folder, import them manually if needed</DialogTitle>
+
+feature_5#  create an option to export comments to a davinci resolve format EDL
+feature_6# assign a unique id number to each comment and display it right after the checkbox icon
