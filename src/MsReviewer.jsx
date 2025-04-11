@@ -1043,7 +1043,7 @@ export const MediaAnnotator = () => {
                         <DialogTitle textAlign="center" variant="h4">Ms Media Reviewer</DialogTitle>
                         <BrowserWarning />
                         <DialogTitle textAlign="center" variant="h4"sx={{color: 'red'}}>Important</DialogTitle>
-                        <DialogTitle>If project doesn't load the latest comments automatically after a restart, comment files and backups will be stored/saved in the downloads folder, import them manually if needed</DialogTitle>
+                        <DialogTitle>This app doesn't load the latest comments automatically. comment files and backups will be stored/saved in the downloads folder of your device. import them manually.<br/> If you just received this file, inisde the folder containing this file you'll find a json comment file</DialogTitle>
                         <DialogTitle>Enter Your Name</DialogTitle>
                         <DialogContent>
                             <TextField
