@@ -21,3 +21,31 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+EXPORT APP
+1-npm run build
+2-change the paths from absolute to relative
+this is a relative structure
+`
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="favicon.ico" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Web site created using create-react-app" />
+    <link rel="apple-touch-icon" href="logo192.png" />
+    <link rel="manifest" href="manifest.json" />
+    <title>Ms Reviewer</title>
+    <script defer="defer" src="static/js/main.7dedcf9a.js"></script>
+    <link href="static/css/main.f855e6bc.css" rel="stylesheet" />
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+`
+3-Open the index.html and veryfy if it works
+4-copy the "Build" folder, rename it and you can share it by zipping it
