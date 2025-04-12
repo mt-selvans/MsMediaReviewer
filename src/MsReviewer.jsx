@@ -126,6 +126,7 @@ export const MediaAnnotator = () => {
     const [editingCommentText, setEditingCommentText] = useState('');
     const [editingTimecodeId, setEditingTimecodeId] = useState(null);
     const [editingTimecodeValue, setEditingTimecodeValue] = useState('');
+    const [nextCommentId, setNextCommentId] = useState(1);
     const replyInputRef = useRef(null);
     const commentsScrollRef = useRef(null);
 
@@ -166,6 +167,7 @@ export const MediaAnnotator = () => {
         setMediaFilename(file.name);
         setProjectName(file.name.split('.')[0]);
         setUnsavedChanges(false);
+        setNextCommentId(1);
     };
 
     const { getRootProps, getInputProps } = useDropzone({ onDrop });
@@ -283,7 +285,7 @@ export const MediaAnnotator = () => {
         if (!newComment.trim() && !currentDrawing.length) return;
 
         const comment = {
-            id: Date.now(),
+            id: nextCommentId,
             username,
             timecode: currentTime,
             text: newComment,
@@ -299,6 +301,7 @@ export const MediaAnnotator = () => {
         setCurrentDrawing([]);
         setDrawingMode(false);
         setUnsavedChanges(true);
+        setNextCommentId(nextCommentId >= 9999 ? 1 : nextCommentId + 1); // Reset to 1 if exceeds 9999
     };
 
     const addReply = (commentId, parentComment = null, level = 0) => {
@@ -365,7 +368,6 @@ export const MediaAnnotator = () => {
 
         setComments(prevComments => {
             if (isReply) {
-                // For replies, find the parent comment and filter out the reply
                 return prevComments.map(comment => {
                     if (comment.id === parentId) {
                         return {
@@ -373,7 +375,6 @@ export const MediaAnnotator = () => {
                             replies: (comment.replies || []).filter(reply => reply.id !== commentId)
                         };
                     }
-                    // Recursively handle nested replies
                     if (comment.replies && comment.replies.length > 0) {
                         return {
                             ...comment,
@@ -391,7 +392,6 @@ export const MediaAnnotator = () => {
                     return comment;
                 });
             } else {
-                // For top-level comments, filter out the comment
                 return prevComments.filter(comment => comment.id !== commentId);
             }
         });
@@ -566,11 +566,39 @@ export const MediaAnnotator = () => {
         return result;
     }, [comments, sortBy, sortOrder, hideDone]);
 
+    const exportToEDL = () => {
+        if (comments.length === 0) return;
+
+        const edlLines = [];
+        edlLines.push('TITLE: Comments Export');
+        edlLines.push('FCM: NON-DROP FRAME');
+
+        sortedComments().forEach((comment, index) => {
+            const timecode = formatTimecode(comment.timecode);
+            const paddedId = comment.id.toString().padStart(4, '0');
+            const commentText = `ID-${paddedId}: ${comment.text}`;
+            edlLines.push(`${index + 1}  AX       V     C        ${timecode} ${timecode} ${timecode} ${timecode}`);
+            edlLines.push(`* COMMENT: ${commentText}`);
+        });
+
+        const edlContent = edlLines.join('\n');
+        const blob = new Blob([edlContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${projectName}_comments_export.edl`;
+        a.click();
+    };
+
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
                 if (e.target.id === 'comment-box' && e.key === 'Enter' && e.shiftKey) {
                     return;
+                }
+                if (e.key === 'Escape' && showDeleteConfirm) {
+                    setShowDeleteConfirm(null);
+                    e.preventDefault();
                 }
                 return;
             }
@@ -587,6 +615,7 @@ export const MediaAnnotator = () => {
                 'Escape': () => {
                     setReplyTo(null);
                     setDrawingMode(false);
+                    setShowDeleteConfirm(null);
                     if (isFullScreen) {
                         document.exitFullscreen();
                         setIsFullScreen(false);
@@ -619,7 +648,7 @@ export const MediaAnnotator = () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('wheel', handleWheel);
         };
-    }, [handlePlayPause, handleSkip, newComment, drawingMode, volume, undo, redo, isFullScreen]);
+    }, [handlePlayPause, handleSkip, newComment, drawingMode, volume, undo, redo, isFullScreen, showDeleteConfirm]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -697,7 +726,8 @@ export const MediaAnnotator = () => {
             isVideo,
             comments,
             frameRate,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            nextCommentId
         };
 
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -727,7 +757,8 @@ export const MediaAnnotator = () => {
             isVideo,
             comments,
             frameRate,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            nextCommentId
         };
 
         const backupBlob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -758,6 +789,7 @@ export const MediaAnnotator = () => {
                 setIsVideo(data.isVideo);
                 setComments(data.comments || []);
                 setFrameRate(data.frameRate || 24);
+                setNextCommentId(data.nextCommentId || (data.comments?.length > 0 ? Math.max(...data.comments.map(c => c.id)) + 1 : 1));
                 setUnsavedChanges(false);
                 e.target.value = '';
             } catch (err) {
@@ -857,9 +889,12 @@ export const MediaAnnotator = () => {
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); toggleDone(comment.id, isReply, parentId); }} sx={{ bgcolor: comment.done ? 'success.main' : 'background.paper', color: comment.done ? '#ffffff' : 'text.secondary', border: 1, borderColor: 'divider', '&:hover': { bgcolor: comment.done ? 'success.main' : 'action.hover' } }}>
-                        <CheckIcon />
-                    </IconButton>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <IconButton size="small" onClick={(e) => { e.stopPropagation(); toggleDone(comment.id, isReply, parentId); }} sx={{ bgcolor: comment.done ? 'success.main' : 'background.paper', color: comment.done ? '#ffffff' : 'text.secondary', border: 1, borderColor: 'divider', '&:hover': { bgcolor: comment.done ? 'success.main' : 'action.hover' } }}>
+                            <CheckIcon />
+                        </IconButton>
+                        <Typography variant="body2" sx={{ ml: 0.5, fontWeight: 'bold' }}>#{comment.id.toString().padStart(4, '0')}</Typography>
+                    </Box>
                     <Typography variant="body1" sx={{ fontWeight: 'bold', color: getUsernameColor(comment.username) }}>👤 {comment.username}</Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {editingTimecodeId === comment.id ? (
@@ -914,7 +949,6 @@ export const MediaAnnotator = () => {
                             </IconButton>
                         )}
                     </Box>
-                    {/*disable to delete all comments DD*/}
                     {!isReply && comment.username === username && (
                         <IconButton
                             size="small"
@@ -932,8 +966,7 @@ export const MediaAnnotator = () => {
                                 <Typography variant="caption" sx={{ ml: 0.5 }}>Confirm?</Typography>
                             )}
                         </IconButton>
-                        // disable to delete all comments DD
-                        )}
+                    )}
                 </Box>
 
                 {comment.drawing && (
@@ -1021,19 +1054,6 @@ export const MediaAnnotator = () => {
         </ListItem>
     );
 
-    const BrowserWarning = () => {
-        // Check if the browser is Chrome
-        const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
-
-        return (
-            !isChrome && (
-                <DialogTitle variant="h4" textAlign="center" sx={{ color: "red" }}>
-                    Best when opened in Chrome
-                </DialogTitle>
-            )
-        );
-    };
-
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
@@ -1041,9 +1061,8 @@ export const MediaAnnotator = () => {
                 {showUsernameModal && (
                     <Dialog open={showUsernameModal} onClose={() => setShowUsernameModal(false)}>
                         <DialogTitle textAlign="center" variant="h4">Ms Media Reviewer</DialogTitle>
-                        <BrowserWarning />
                         <DialogTitle textAlign="center" variant="h4"sx={{color: 'red'}}>Important</DialogTitle>
-                        <DialogTitle>This app doesn't load the latest comments automatically. comment files and backups will be stored/saved in the downloads folder of your device. import them manually.<br/> If you just received this file, inisde the folder containing this file you'll find a json comment file</DialogTitle>
+                        <DialogTitle>This app doesn't load the comments automatically. Comments files and backups will be stored/saved in the <b>Downloads</b> folder of your device. Import them manually.<br/> If you just received this html file, inside the folder containing it you'll find a json comment file to import</DialogTitle>
                         <DialogTitle>Enter Your Name</DialogTitle>
                         <DialogContent>
                             <TextField
@@ -1120,8 +1139,8 @@ export const MediaAnnotator = () => {
                                             <UploadFileIcon /> {mediaUrl ? 'Change Media' : 'Load Media'}
                                         </Button>
                                     </Box>
-                                    <Button color="inherit" onClick={() => setShowShareModal(true)}>
-                                        <ShareIcon /> Share
+                                    <Button color="inherit" onClick={exportToEDL}>
+                                        <ShareIcon /> Export EDL
                                     </Button>
                                 </Box>
                             </Toolbar>
