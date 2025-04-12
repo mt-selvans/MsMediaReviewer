@@ -6,5 +6,6 @@ write the WHOLE UPDATED CODE please ensuring you don't break anything.
 If a comment hast `DD` (don't delete) please don't delete it
 IT'S IMPERATIVE YOU WRITE THE WHOLE UPDATED CODE, BEFORE STARTING WRITING ANYTHING PLEASE CONFIRM ME YOU'LL WRITE THE WHOLE UPDATED CODE WITHOUT SKIPPING A SINGLE LINE
 I DON'T WANT ANY `...REST OF THE CODE` i WANT ALL THE UPDATED CODE
+ReactJs code
 
 feature_7# when running npm run build change the paths from absolute to relative

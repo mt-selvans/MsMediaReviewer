@@ -118,6 +118,28 @@ const CommentMarker = ({ comment, duration, seekToTimecode, selectedComment, set
     </Box>
 );
 
+const DropZoneArea = ({ onDrop, accept, children, isDragActive }) => (
+    <Box
+        sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: isDragActive ? 'primary.light' : 'background.paper',
+            color: 'text.secondary',
+            border: 2,
+            borderColor: 'divider',
+            borderStyle: 'dashed',
+            m: 2,
+            borderRadius: 2,
+            transition: 'background-color 0.3s ease'
+        }}
+    >
+        {children}
+    </Box>
+);
+
 export const MediaAnnotator = () => {
     const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
     const [darkMode, setDarkMode] = useState(prefersDarkMode);
@@ -181,6 +203,8 @@ export const MediaAnnotator = () => {
     const [nextCommentId, setNextCommentId] = useState(1);
     const replyInputRef = useRef(null);
     const commentsScrollRef = useRef(null);
+    const [isDraggingMedia, setIsDraggingMedia] = useState(false);
+    const [isDraggingComments, setIsDraggingComments] = useState(false);
 
     useEffect(() => {
         const savedUsername = sessionStorage.getItem('annotator-username');
@@ -206,7 +230,8 @@ export const MediaAnnotator = () => {
         localStorage.setItem('annotator-theme', newMode ? 'dark' : 'light');
     };
 
-    const onDrop = useCallback((acceptedFiles) => {
+    const onMediaDrop = useCallback((acceptedFiles) => {
+        setIsDraggingMedia(false);
         const file = acceptedFiles[0];
         if (!file) return;
 
@@ -219,7 +244,56 @@ export const MediaAnnotator = () => {
         setNextCommentId(1);
     }, []);
 
-    const { getRootProps, getInputProps } = useDropzone({ onDrop });
+    const onCommentsDrop = useCallback((acceptedFiles) => {
+        setIsDraggingComments(false);
+        const file = acceptedFiles[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                setProjectName(data.projectName);
+                setMediaFilename(data.mediaFilename || '');
+                setIsVideo(data.isVideo);
+                setComments(data.comments || []);
+                setFrameRate(data.frameRate || 24);
+                setNextCommentId(data.nextCommentId || (data.comments?.length > 0 ? Math.max(...data.comments.map(c => c.id)) + 1 : 1));
+                setUnsavedChanges(false);
+            } catch (err) {
+                alert('Error loading project file');
+            }
+        };
+        reader.readAsText(file);
+    }, []);
+
+    const {
+        getRootProps: getMediaRootProps,
+        getInputProps: getMediaInputProps,
+        isDragActive: isMediaDragActive
+    } = useDropzone({
+        onDrop: onMediaDrop,
+        accept: {
+            'video/*': ['.mp4', '.mov', '.avi', '.mkv'],
+            'audio/*': ['.mp3', '.wav', '.ogg', '.m4a']
+        },
+        onDragEnter: () => setIsDraggingMedia(true),
+        onDragLeave: () => setIsDraggingMedia(false)
+    });
+
+    const {
+        getRootProps: getCommentsRootProps,
+        getInputProps: getCommentsInputProps,
+        isDragActive: isCommentsDragActive
+    } = useDropzone({
+        onDrop: onCommentsDrop,
+        accept: {
+            'application/json': ['.json']
+        },
+        onDragEnter: () => setIsDraggingComments(true),
+        onDragLeave: () => setIsDraggingComments(false),
+        noClick: true
+    });
 
     const handlePlayPause = useCallback(() => {
         if (isPlaying) {
@@ -409,10 +483,10 @@ export const MediaAnnotator = () => {
                         return {
                             ...comment,
                             replies: comment.replies.map(reply => {
-                                if (reply.id === parentId) {
+                                if (reply.replies && reply.replies.length > 0) {
                                     return {
                                         ...reply,
-                                        replies: (reply.replies || []).filter(r => r.id !== commentId)
+                                        replies: reply.replies.filter(r => r.id !== commentId)
                                     };
                                 }
                                 return reply;
@@ -777,7 +851,7 @@ export const MediaAnnotator = () => {
                                 🕒 {formatTimecode(comment.timecode)}
                             </Typography>
                         )}
-                        {!isReply && comment.username === username && (
+                        {comment.username === username && (
                             <IconButton
                                 size="small"
                                 onClick={(e) => {
@@ -791,7 +865,7 @@ export const MediaAnnotator = () => {
                             </IconButton>
                         )}
                     </Box>
-                    {!isReply && comment.username === username && (
+                    {comment.username === username && (
                         <IconButton
                             size="small"
                             onClick={(e) => {
@@ -1049,7 +1123,7 @@ export const MediaAnnotator = () => {
                                     <TimeCodeDisplay
                                         time={formatTimecode(currentTime)}
                                         style={{ p: 0, width: 200 }}
-                                        inputBase={{ fontSize: 30 }}
+                                        inputBase={{ fontSize: 30, height: 15 }}
                                         onClick={(e) => {
                                             navigator.clipboard.writeText(formatTimecode(currentTime));
                                             e.target.select();
@@ -1075,8 +1149,8 @@ export const MediaAnnotator = () => {
                                             <FileDownloadIcon /> Add comments
                                         </Button>
                                     </label>
-                                    <Box {...getRootProps()} sx={{ display: 'none' }}>
-                                        <input {...getInputProps()} />
+                                    <Box {...getMediaRootProps()} sx={{ display: 'none' }}>
+                                        <input {...getMediaInputProps()} />
                                         <Button component="span" color="inherit">
                                             <UploadFileIcon /> {mediaUrl ? 'Change Media' : 'Load Media'}
                                         </Button>
@@ -1127,15 +1201,18 @@ export const MediaAnnotator = () => {
                         <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
                             <Box sx={{ flex: 2.5, display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider', bgcolor: 'background.paper', overflow: 'hidden' }}>
                                 {!mediaUrl ? (
-                                    <Box {...getRootProps()} sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.paper', color: 'text.secondary', border: 2, borderColor: 'divider', borderStyle: 'dashed', m: 2, borderRadius: 2 }}>
-                                        <Typography variant="h6">🎬</Typography>
-                                        <Typography variant="body1">Drag and drop a video or audio file here</Typography>
-                                        <Typography variant="body1">or</Typography>
-                                        <label htmlFor="media-upload">
-                                            <Button component="span" variant="contained" color="primary">
-                                                Browse Files
-                                            </Button>
-                                        </label>
+                                    <Box {...getMediaRootProps()} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                                        <input {...getMediaInputProps()} />
+                                        <DropZoneArea isDragActive={isMediaDragActive}>
+                                            <Typography variant="h6">🎬</Typography>
+                                            <Typography variant="body1">Drag and drop a video or audio file here</Typography>
+                                            <Typography variant="body1">or</Typography>
+                                            <label htmlFor="media-upload">
+                                                <Button component="span" variant="contained" color="primary">
+                                                    Browse Files
+                                                </Button>
+                                            </label>
+                                        </DropZoneArea>
                                     </Box>
                                 ) : (
                                     <>
@@ -1339,7 +1416,8 @@ export const MediaAnnotator = () => {
                                 )}
                             </Box>
 
-                            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default' }}>
+                            <Box {...getCommentsRootProps()} sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default' }}>
+                                <input {...getCommentsInputProps()} />
                                 <Box sx={{ p: 1, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                         <Typography variant="body2">Sort by:</Typography>
@@ -1364,26 +1442,40 @@ export const MediaAnnotator = () => {
                                     />
                                 </Box>
 
-                                <Box
-                                    ref={commentsScrollRef}
-                                    sx={{
-                                        flex: 1,
-                                        overflowY: 'auto',
-                                        p: 1,
-                                        '&::-webkit-scrollbar': { width: '10px' },
-                                        '&::-webkit-scrollbar-thumb': {
-                                            backgroundColor: darkMode ? '#555' : '#ccc',
-                                            borderRadius: '5px',
-                                        },
-                                        '&::-webkit-scrollbar-thumb:hover': {
-                                            backgroundColor: darkMode ? '#777' : '#aaa',
-                                        }
-                                    }}
-                                >
-                                    <List>
-                                        {sortedComments().map(comment => renderComment(comment))}
-                                    </List>
-                                </Box>
+                                {comments.length === 0 ? (
+                                    <DropZoneArea isDragActive={isCommentsDragActive}>
+                                        <Typography variant="h6">💬</Typography>
+                                        <Typography variant="body1">Drag and drop a JSON comments file here</Typography>
+                                        <Typography variant="body1">or</Typography>
+                                        <input type="file" id="load-project" accept=".json" onChange={loadProject} style={{ display: 'none' }} />
+                                        <label htmlFor="load-project">
+                                            <Button component="span" variant="contained" color="primary">
+                                                Browse Files
+                                            </Button>
+                                        </label>
+                                    </DropZoneArea>
+                                ) : (
+                                    <Box
+                                        ref={commentsScrollRef}
+                                        sx={{
+                                            flex: 1,
+                                            overflowY: 'auto',
+                                            p: 1,
+                                            '&::-webkit-scrollbar': { width: '10px' },
+                                            '&::-webkit-scrollbar-thumb': {
+                                                backgroundColor: darkMode ? '#555' : '#ccc',
+                                                borderRadius: '5px',
+                                            },
+                                            '&::-webkit-scrollbar-thumb:hover': {
+                                                backgroundColor: darkMode ? '#777' : '#aaa',
+                                            }
+                                        }}
+                                    >
+                                        <List>
+                                            {sortedComments().map(comment => renderComment(comment))}
+                                        </List>
+                                    </Box>
+                                )}
                             </Box>
                         </Box>
                     </Box>
