@@ -13,21 +13,18 @@ import {
     MenuItem,
     Select,
     FormControl,
+    FormControlLabel,
     Slider,
     Box,
     Grid,
     List,
     ListItem,
-    Radio,
-    RadioGroup,
-    FormControlLabel,
     Switch,
     useMediaQuery,
     createTheme,
     ThemeProvider,
     CssBaseline,
 } from '@mui/material';
-import ShareIcon from '@mui/icons-material/Share';
 import {
     Brightness4 as Brightness4Icon,
     Brightness7 as Brightness7Icon,
@@ -49,34 +46,90 @@ import {
     Redo as RedoIcon,
     Fullscreen as FullscreenIcon,
     FullscreenExit as FullscreenExitIcon,
-    WhatsApp as WhatsAppIcon,
-    Facebook as FacebookIcon,
-    Email as EmailIcon,
+    Share as ShareIcon,
 } from '@mui/icons-material';
 import { useDropzone } from 'react-dropzone';
+
+const TimeCodeDisplay = ({ time, style, inputBase, onClick }) => (
+    <TextField
+        value={time}
+        sx={{
+            width: 130,
+            textAlign: 'center',
+            p: 0.5,
+            bgcolor: 'background.paper',
+            borderRadius: 1,
+            border: 1,
+            borderColor: 'divider',
+            cursor: 'pointer',
+            ...style,
+            '& .MuiInputBase-input': {
+                cursor: 'pointer',
+                textAlign: 'center',
+                ...inputBase
+            }
+        }}
+        onClick={onClick}
+        inputProps={{ readOnly: true }}
+    />
+);
+
+const CommentMarker = ({ comment, duration, seekToTimecode, selectedComment, setSelectedComment, getUsernameColor }) => (
+    <Box
+        sx={{
+            position: 'absolute',
+            top: -20,
+            left: `${(comment.timecode / duration) * 100}%`,
+            transform: 'translateX(-50%)',
+            width: 10,
+            height: 20,
+            bgcolor: getUsernameColor(comment.username),
+            borderBottomLeftRadius: '100%',
+            borderBottomRightRadius: '100%',
+            cursor: 'pointer',
+            zIndex: 999
+        }}
+        onClick={() => {
+            seekToTimecode(comment.timecode);
+            setSelectedComment(comment.id);
+        }}
+        onMouseEnter={() => setSelectedComment(comment.id)}
+        onMouseLeave={() => setSelectedComment(null)}
+    >
+        {selectedComment === comment.id && (
+            <Box sx={{
+                position: 'absolute',
+                top: -40,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                bgcolor: getUsernameColor(comment.username),
+                px: 1,
+                py: 0.5,
+                borderRadius: 1,
+                fontSize: 20,
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+                color: '#000000',
+                zIndex: 9999
+            }}>
+                {comment.username}
+            </Box>
+        )}
+    </Box>
+);
 
 export const MediaAnnotator = () => {
     const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
     const [darkMode, setDarkMode] = useState(prefersDarkMode);
-
     const theme = React.useMemo(
-        () =>
-            createTheme({
-                palette: {
-                    mode: darkMode ? 'dark' : 'light',
-                    text: {
-                        primary: darkMode ? '#ffffff' : '#000000',
-                    },
-                    button: {
-                        primary: {
-                            main: darkMode ? '#bb86fc' : '#3f51b5',
-                        },
-                        secondary: {
-                            main: darkMode ? '#03dac6' : '#f50057',
-                        },
-                    },
+        () => createTheme({
+            palette: {
+                mode: darkMode ? 'dark' : 'light',
+                text: {
+                    primary: darkMode ? '#ffffff' : '#000000',
                 },
-            }),
+            },
+        }),
         [darkMode],
     );
 
@@ -120,7 +173,6 @@ export const MediaAnnotator = () => {
     const [lastSavedTime, setLastSavedTime] = useState(null);
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [showSaveConfirm, setShowSaveConfirm] = useState(false);
-    const [showShareModal, setShowShareModal] = useState(false);
     const [selectedComment, setSelectedComment] = useState(null);
     const [editingCommentId, setEditingCommentId] = useState(null);
     const [editingCommentText, setEditingCommentText] = useState('');
@@ -141,14 +193,11 @@ export const MediaAnnotator = () => {
             if (unsavedChanges) {
                 e.preventDefault();
                 e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-                return e.returnValue;
             }
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => {
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-        };
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [unsavedChanges]);
 
     const toggleTheme = () => {
@@ -157,7 +206,7 @@ export const MediaAnnotator = () => {
         localStorage.setItem('annotator-theme', newMode ? 'dark' : 'light');
     };
 
-    const onDrop = (acceptedFiles) => {
+    const onDrop = useCallback((acceptedFiles) => {
         const file = acceptedFiles[0];
         if (!file) return;
 
@@ -168,75 +217,66 @@ export const MediaAnnotator = () => {
         setProjectName(file.name.split('.')[0]);
         setUnsavedChanges(false);
         setNextCommentId(1);
-    };
+    }, []);
 
     const { getRootProps, getInputProps } = useDropzone({ onDrop });
 
-    const handlePlayPause = () => {
+    const handlePlayPause = useCallback(() => {
         if (isPlaying) {
             mediaRef.current.pause();
         } else {
             mediaRef.current.play();
         }
         setIsPlaying(!isPlaying);
-    };
+    }, [isPlaying]);
 
-    const handleSkip = (seconds) => {
+    const handleSkip = useCallback((seconds) => {
         mediaRef.current.currentTime += seconds;
-    };
+    }, []);
 
-    const handleFrameStep = (frames) => {
-        if (isVideo) {
-            mediaRef.current.currentTime += frames / frameRate;
-        } else {
-            mediaRef.current.currentTime += frames * 0.001;
-        }
-    };
+    const handleFrameStep = useCallback((frames) => {
+        mediaRef.current.currentTime += isVideo ? frames / frameRate : frames * 0.001;
+    }, [isVideo, frameRate]);
 
-    const handleTimeUpdate = () => {
-        if (!isSeeking) {
-            setCurrentTime(mediaRef.current.currentTime);
-        }
-    };
+    const handleTimeUpdate = useCallback(() => {
+        if (!isSeeking) setCurrentTime(mediaRef.current.currentTime);
+    }, [isSeeking]);
 
-    const handleLoadedMetadata = () => {
+    const handleLoadedMetadata = useCallback(() => {
         setDuration(mediaRef.current.duration);
         if (isVideo) {
             mediaRef.current.requestVideoFrameCallback((now, metadata) => {
                 setFrameRate(metadata.mediaTime === 0 ? 24 : 1 / (metadata.mediaTime - currentTime));
             });
         }
-
         mediaRef.current.muted = false;
-    };
+    }, [isVideo, currentTime]);
 
-    const handleRateChange = (rate) => {
+    const handleRateChange = useCallback((rate) => {
         setPlaybackRate(rate);
         mediaRef.current.playbackRate = rate;
-    };
+    }, []);
 
-    const handleVolumeChange = (e) => {
+    const handleVolumeChange = useCallback((e) => {
         const newVolume = parseFloat(e.target.value);
         setVolume(newVolume);
         mediaRef.current.volume = newVolume;
-        if (newVolume > 0 && isMuted) {
-            setIsMuted(false);
-        }
-    };
+        if (newVolume > 0 && isMuted) setIsMuted(false);
+    }, [isMuted]);
 
-    const toggleMute = () => {
+    const toggleMute = useCallback(() => {
         setIsMuted(!isMuted);
         mediaRef.current.muted = !isMuted;
-    };
+    }, [isMuted]);
 
-    const handleProgressHover = (e) => {
+    const handleProgressHover = useCallback((e) => {
         const rect = progressBarRef.current.getBoundingClientRect();
         const pos = (e.clientX - rect.left) / rect.width;
         setHoverTime(pos * duration);
         setHoverPosition(e.clientX - rect.left);
-    };
+    }, [duration]);
 
-    const handleSeek = (e) => {
+    const handleSeek = useCallback((e) => {
         setIsSeeking(true);
         const rect = progressBarRef.current.getBoundingClientRect();
         const pos = (e.clientX - rect.left) / rect.width;
@@ -244,9 +284,9 @@ export const MediaAnnotator = () => {
         mediaRef.current.currentTime = newTime;
         setCurrentTime(newTime);
         setTimeout(() => setIsSeeking(false), 100);
-    };
+    }, [duration]);
 
-    const formatTimecode = (time) => {
+    const formatTimecode = useCallback((time) => {
         const formatTime = (time, frameRate) => {
             const hours = Math.floor(time / 3600);
             const minutes = Math.floor((time % 3600) / 60);
@@ -257,15 +297,12 @@ export const MediaAnnotator = () => {
         };
 
         const { hours, minutes, seconds, frames, milliseconds } = formatTime(time, frameRate);
+        return isVideo
+            ? `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`
+            : `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
+    }, [isVideo, frameRate]);
 
-        if (isVideo) {
-            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`;
-        } else {
-            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
-        }
-    };
-
-    const parseTimecode = (timecode) => {
+    const parseTimecode = useCallback((timecode) => {
         const parts = timecode.split(':');
         if (parts.length !== 4) return 0;
 
@@ -274,14 +311,12 @@ export const MediaAnnotator = () => {
         const seconds = parseInt(parts[2]) || 0;
         const framesOrMs = parseInt(parts[3]) || 0;
 
-        if (isVideo) {
-            return hours * 3600 + minutes * 60 + seconds + framesOrMs / frameRate;
-        } else {
-            return hours * 3600 + minutes * 60 + seconds + framesOrMs / 1000;
-        }
-    };
+        return isVideo
+            ? hours * 3600 + minutes * 60 + seconds + framesOrMs / frameRate
+            : hours * 3600 + minutes * 60 + seconds + framesOrMs / 1000;
+    }, [isVideo, frameRate]);
 
-    const addComment = () => {
+    const addComment = useCallback(() => {
         if (!newComment.trim() && !currentDrawing.length) return;
 
         const comment = {
@@ -301,19 +336,16 @@ export const MediaAnnotator = () => {
         setCurrentDrawing([]);
         setDrawingMode(false);
         setUnsavedChanges(true);
-        setNextCommentId(nextCommentId >= 9999 ? 1 : nextCommentId + 1); // Reset to 1 if exceeds 9999
-    };
+        setNextCommentId(nextCommentId >= 9999 ? 1 : nextCommentId + 1);
+    }, [newComment, currentDrawing, nextCommentId, username, currentTime, lineWidth, comments]);
 
-    const addReply = (commentId, parentComment = null, level = 0) => {
+    const addReply = useCallback((commentId, parentComment = null, level = 0) => {
         if (!replyText.trim() || level > 10) return;
 
         const updateReplies = (comments, targetId, newReply, currentLevel = 0) => {
             return comments.map(comment => {
                 if (comment.id === targetId) {
-                    return {
-                        ...comment,
-                        replies: [...(comment.replies || []), newReply]
-                    };
+                    return { ...comment, replies: [...(comment.replies || []), newReply] };
                 }
                 if (comment.replies && comment.replies.length > 0 && currentLevel < 10) {
                     return {
@@ -338,17 +370,15 @@ export const MediaAnnotator = () => {
         setReplyText('');
         setReplyTo(null);
         setUnsavedChanges(true);
-    };
+    }, [replyText, username, currentTime]);
 
-    const toggleDone = (commentId, isReply = false, parentId = null) => {
+    const toggleDone = useCallback((commentId, isReply = false, parentId = null) => {
         setComments(comments.map(comment => {
             if (isReply && comment.id === parentId) {
                 return {
                     ...comment,
                     replies: (comment.replies || []).map(reply => {
-                        if (reply.id === commentId) {
-                            return { ...reply, done: !reply.done };
-                        }
+                        if (reply.id === commentId) return { ...reply, done: !reply.done };
                         return reply;
                     })
                 };
@@ -358,9 +388,9 @@ export const MediaAnnotator = () => {
             return comment;
         }));
         setUnsavedChanges(true);
-    };
+    }, [comments]);
 
-    const deleteComment = (commentId, isReply = false, parentId = null) => {
+    const deleteComment = useCallback((commentId, isReply = false, parentId = null) => {
         if (showDeleteConfirm !== commentId) {
             setShowDeleteConfirm(commentId);
             return;
@@ -396,22 +426,18 @@ export const MediaAnnotator = () => {
             }
         });
 
-        if (showDrawing === commentId) {
-            setShowDrawing(null);
-        }
+        if (showDrawing === commentId) setShowDrawing(null);
         setShowDeleteConfirm(null);
         setUnsavedChanges(true);
-    };
+    }, [showDeleteConfirm, showDrawing]);
 
-    const editCommentText = (commentId, newText, isReply = false, parentId = null) => {
+    const editCommentText = useCallback((commentId, newText, isReply = false, parentId = null) => {
         setComments(comments.map(comment => {
             if (isReply && comment.id === parentId) {
                 return {
                     ...comment,
                     replies: (comment.replies || []).map(reply => {
-                        if (reply.id === commentId) {
-                            return { ...reply, text: newText };
-                        }
+                        if (reply.id === commentId) return { ...reply, text: newText };
                         return reply;
                     })
                 };
@@ -422,9 +448,9 @@ export const MediaAnnotator = () => {
         }));
         setEditingCommentId(null);
         setUnsavedChanges(true);
-    };
+    }, [comments]);
 
-    const editCommentTimecode = (commentId, newTimecode, isReply = false, parentId = null) => {
+    const editCommentTimecode = useCallback((commentId, newTimecode, isReply = false, parentId = null) => {
         const timeInSeconds = parseTimecode(newTimecode);
         if (isNaN(timeInSeconds)) return;
 
@@ -433,9 +459,7 @@ export const MediaAnnotator = () => {
                 return {
                     ...comment,
                     replies: (comment.replies || []).map(reply => {
-                        if (reply.id === commentId) {
-                            return { ...reply, timecode: timeInSeconds };
-                        }
+                        if (reply.id === commentId) return { ...reply, timecode: timeInSeconds };
                         return reply;
                     })
                 };
@@ -446,9 +470,9 @@ export const MediaAnnotator = () => {
         }));
         setEditingTimecodeId(null);
         setUnsavedChanges(true);
-    };
+    }, [comments, parseTimecode]);
 
-    const seekToTimecode = (time) => {
+    const seekToTimecode = useCallback((time) => {
         mediaRef.current.currentTime = time;
         setIsPlaying(true);
         mediaRef.current.play();
@@ -465,9 +489,9 @@ export const MediaAnnotator = () => {
                 });
             }
         }
-    };
+    }, [comments]);
 
-    const startDrawing = (e) => {
+    const startDrawing = useCallback((e) => {
         if (!drawingMode) return;
 
         const canvas = canvasRef.current;
@@ -477,9 +501,9 @@ export const MediaAnnotator = () => {
 
         setIsDrawing(true);
         setCurrentDrawing([...currentDrawing, { type: 'start', x, y, color: '#ff0000', lineWidth }]);
-    };
+    }, [drawingMode, currentDrawing, lineWidth]);
 
-    const draw = (e) => {
+    const draw = useCallback((e) => {
         if (!isDrawing || !drawingMode) return;
 
         const canvas = canvasRef.current;
@@ -489,90 +513,68 @@ export const MediaAnnotator = () => {
 
         setCurrentDrawing([...currentDrawing, { type: 'line', x, y, color: '#ff0000', lineWidth }]);
         drawOnCanvas();
-    };
+    }, [isDrawing, drawingMode, currentDrawing, lineWidth]);
 
-    const endDrawing = () => {
+    const endDrawing = useCallback(() => {
         setIsDrawing(false);
-    };
+    }, []);
 
-    const drawOnCanvas = () => {
+    const drawOnCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
-
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         const drawingToShow = showDrawing || currentDrawing;
         if (drawingToShow.length > 0) {
-            drawPath(ctx, drawingToShow);
+            ctx.beginPath();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = drawingToShow[0].color;
+            ctx.lineWidth = drawingToShow[0].lineWidth || lineWidth;
+
+            drawingToShow.forEach((point) => {
+                if (point.type === 'start') {
+                    ctx.moveTo(point.x, point.y);
+                } else {
+                    ctx.lineTo(point.x, point.y);
+                }
+            });
+
+            ctx.stroke();
         }
-    };
+    }, [showDrawing, currentDrawing, lineWidth]);
 
-    const drawPath = (ctx, path) => {
-        if (path.length === 0) return;
-
-        ctx.beginPath();
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = path[0].color;
-        ctx.lineWidth = path[0].lineWidth || lineWidth;
-
-        path.forEach((point, index) => {
-            if (point.type === 'start') {
-                ctx.moveTo(point.x, point.y);
-            } else {
-                ctx.lineTo(point.x, point.y);
-            }
-        });
-
-        ctx.stroke();
-    };
-
-    const undo = () => {
+    const undo = useCallback(() => {
         if (currentDrawing.length === 0) return;
         setUndoStack([...undoStack, currentDrawing[currentDrawing.length - 1]]);
         setCurrentDrawing(currentDrawing.slice(0, -1));
         drawOnCanvas();
-    };
+    }, [currentDrawing, undoStack, drawOnCanvas]);
 
-    const redo = () => {
+    const redo = useCallback(() => {
         if (redoStack.length === 0) return;
         setCurrentDrawing([...currentDrawing, redoStack[redoStack.length - 1]]);
         setRedoStack(redoStack.slice(0, -1));
         drawOnCanvas();
-    };
+    }, [currentDrawing, redoStack, drawOnCanvas]);
 
-    const focusCommentBox = () => {
-        const commentBox = document.getElementById('comment-box');
-        if (commentBox) {
-            commentBox.focus();
-        }
-    };
-
-    const getUsernameColor = (username) => {
+    const getUsernameColor = useCallback((username) => {
         const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
         const hash = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
         return colors[hash % colors.length];
-    };
+    }, []);
 
     const sortedComments = useCallback(() => {
         let result = [...comments];
-
-        if (hideDone) {
-            result = result.filter(comment => !comment.done);
-        }
-
+        if (hideDone) result = result.filter(comment => !comment.done);
         result.sort((a, b) => sortOrder === 'asc' ? a.timecode - b.timecode : b.timecode - a.timecode);
-
         return result;
-    }, [comments, sortBy, sortOrder, hideDone]);
+    }, [comments, sortOrder, hideDone]);
 
-    const exportToEDL = () => {
+    const exportToEDL = useCallback(() => {
         if (comments.length === 0) return;
 
-        const edlLines = [];
-        edlLines.push('TITLE: Comments Export');
-        edlLines.push('FCM: NON-DROP FRAME');
-
+        const edlLines = ['TITLE: Comments Export', 'FCM: NON-DROP FRAME'];
         sortedComments().forEach((comment, index) => {
             const timecode = formatTimecode(comment.timecode);
             const paddedId = comment.id.toString().padStart(4, '0');
@@ -588,135 +590,21 @@ export const MediaAnnotator = () => {
         a.href = url;
         a.download = `${projectName}_comments_export.edl`;
         a.click();
-    };
+    }, [comments, projectName, sortedComments, formatTimecode]);
 
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                if (e.target.id === 'comment-box' && e.key === 'Enter' && e.shiftKey) {
-                    return;
-                }
-                if (e.key === 'Escape' && showDeleteConfirm) {
-                    setShowDeleteConfirm(null);
-                    e.preventDefault();
-                }
-                return;
-            }
-
-            const keyActions = {
-                ' ': () => { e.preventDefault(); handlePlayPause(); },
-                'ArrowLeft': () => { e.preventDefault(); handleSkip(-5); },
-                'ArrowRight': () => { e.preventDefault(); handleSkip(5); },
-                'ArrowUp': () => { e.preventDefault(); handleVolumeChange({ target: { value: Math.min(volume + 0.1, 1) } }); },
-                'ArrowDown': () => { e.preventDefault(); handleVolumeChange({ target: { value: Math.max(volume - 0.1, 0) } }); },
-                'Enter': () => { if (newComment) { e.preventDefault(); addComment(); } },
-                'z': () => { if (e.ctrlKey && !e.shiftKey) { e.preventDefault(); undo(); } },
-                'Z': () => { if (e.ctrlKey && e.shiftKey) { e.preventDefault(); redo(); } },
-                'Escape': () => {
-                    setReplyTo(null);
-                    setDrawingMode(false);
-                    setShowDeleteConfirm(null);
-                    if (isFullScreen) {
-                        document.exitFullscreen();
-                        setIsFullScreen(false);
-                    }
-                },
-                'Control+Enter': () => { e.preventDefault(); focusCommentBox(); },
-            };
-
-            if (keyActions[e.key]) {
-                keyActions[e.key]();
-            } else if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-                e.preventDefault();
-                focusCommentBox();
-            }
-        };
-
-        const handleWheel = (e) => {
-            if (e.shiftKey && e.altKey) {
-                e.preventDefault();
-                handleSkip(e.deltaY > 0 ? -60 : 60);
-            } else if (e.shiftKey) {
-                e.preventDefault();
-                handleVolumeChange({ target: { value: Math.max(Math.min(volume + (e.deltaY > 0 ? -0.1 : 0.1), 1), 0) } });
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('wheel', handleWheel);
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('wheel', handleWheel);
-        };
-    }, [handlePlayPause, handleSkip, newComment, drawingMode, volume, undo, redo, isFullScreen, showDeleteConfirm]);
-
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const resizeCanvas = () => {
-            if (mediaRef.current) {
-                canvas.width = mediaRef.current.offsetWidth;
-                canvas.height = mediaRef.current.offsetHeight;
-                drawOnCanvas();
-            }
-        };
-
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
-        return () => {
-            window.removeEventListener('resize', resizeCanvas);
-        };
-    }, [mediaUrl, showDrawing, currentDrawing]);
-
-    useEffect(() => {
-        const autoSaveInterval = setInterval(() => {
-            if (unsavedChanges) {
-                saveBackup();
-            }
-        }, 300000);
-
-        return () => {
-            clearInterval(autoSaveInterval);
-        };
-    }, [unsavedChanges]);
-
-    useEffect(() => {
-        const handleFullScreenChange = () => {
-            setIsFullScreen(!!document.fullscreenElement);
-        };
-
-        document.addEventListener('fullscreenchange', handleFullScreenChange);
-        return () => {
-            document.removeEventListener('fullscreenchange', handleFullScreenChange);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (replyTo && replyInputRef.current) {
-            replyInputRef.current.focus();
-        }
-    }, [replyTo]);
-
-    const getTimeSinceLastSave = () => {
+    const getTimeSinceLastSave = useCallback(() => {
         if (!lastSavedTime) return 'NEVER SAVED';
         const minutes = Math.floor((new Date() - lastSavedTime) / 60000);
         const hours = Math.floor(minutes / 60);
-        if (hours > 0) {
-            return `${hours}h ${minutes % 60}m`;
-        }
-        return `${minutes}m`;
-    };
+        return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+    }, [lastSavedTime]);
 
-    const getTimestampPrefix = () => {
+    const getTimestampPrefix = useCallback(() => {
         const now = new Date();
-        const hours = now.getHours().toString().padStart(2, '0');
-        const minutes = now.getMinutes().toString().padStart(2, '0');
-        const seconds = now.getSeconds().toString().padStart(2, '0');
-        return `${hours}.${minutes}.${seconds}-`;
-    };
+        return `${now.getHours().toString().padStart(2, '0')}.${now.getMinutes().toString().padStart(2, '0')}.${now.getSeconds().toString().padStart(2, '0')}-`;
+    }, []);
 
-    const saveProject = () => {
+    const saveProject = useCallback(() => {
         if (!mediaUrl) return;
 
         const data = {
@@ -734,10 +622,7 @@ export const MediaAnnotator = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const baseFilename = mediaFilename ?
-            mediaFilename.split('.').slice(0, -1).join('.') :
-            projectName;
-
+        const baseFilename = mediaFilename ? mediaFilename.split('.').slice(0, -1).join('.') : projectName;
         a.download = `${getTimestampPrefix()}${username} comments-${baseFilename}-MsMediaReview-${new Date().toLocaleDateString('en-GB').replace(/\//g, '.')}.json`;
         a.click();
 
@@ -745,9 +630,9 @@ export const MediaAnnotator = () => {
         setLastSavedTime(new Date());
         setShowSaveConfirm(true);
         setTimeout(() => setShowSaveConfirm(false), 2000);
-    };
+    }, [mediaUrl, projectName, mediaFilename, isVideo, comments, frameRate, nextCommentId, username, getTimestampPrefix]);
 
-    const saveBackup = () => {
+    const saveBackup = useCallback(() => {
         if (!mediaUrl) return;
 
         const data = {
@@ -767,16 +652,12 @@ export const MediaAnnotator = () => {
         backupA.href = backupUrl;
         const now = new Date();
         const timestamp = `${now.getHours()}${now.getMinutes()}`;
-
-        const baseFilename = mediaFilename ?
-            mediaFilename.split('.').slice(0, -1).join('.') :
-            projectName;
-
+        const baseFilename = mediaFilename ? mediaFilename.split('.').slice(0, -1).join('.') : projectName;
         backupA.download = `${getTimestampPrefix()}_Backup-${username} comments-${baseFilename}-MsMediaReview-${new Date().toLocaleDateString('en-GB').replace(/\//g, '.')}-${timestamp}.json`;
         backupA.click();
-    };
+    }, [mediaUrl, projectName, mediaFilename, isVideo, comments, frameRate, nextCommentId, username, getTimestampPrefix]);
 
-    const loadProject = (e) => {
+    const loadProject = useCallback((e) => {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -797,21 +678,19 @@ export const MediaAnnotator = () => {
             }
         };
         reader.readAsText(file);
-    };
+    }, []);
 
-    const toggleFullScreen = () => {
+    const toggleFullScreen = useCallback(() => {
         if (!document.fullscreenElement) {
-            mediaRef.current?.requestFullscreen?.().catch(err => {
-                console.error('Error attempting to enable fullscreen:', err);
-            });
+            mediaRef.current?.requestFullscreen?.().catch(console.error);
         } else {
             document.exitFullscreen();
         }
-    };
+    }, []);
 
-    const handleDoubleClick = () => {
+    const handleDoubleClick = useCallback(() => {
         toggleFullScreen();
-    };
+    }, [toggleFullScreen]);
 
     const shortcuts = [
         { key: 'Space', description: 'Play/Pause' },
@@ -838,36 +717,7 @@ export const MediaAnnotator = () => {
 
     const playbackSpeeds = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 
-    const TimeCodeDisplay = ({ style, inputBase }) => (
-        <TextField
-            value={formatTimecode(currentTime)}
-            sx={{
-                width: 130,
-                textAlign: 'center',
-                p: 0.5,
-                bgcolor: 'background.paper',
-                borderRadius: 1,
-                border: 1,
-                borderColor: 'divider',
-                cursor: 'pointer',
-                ...style,
-                '& .MuiInputBase-input': {
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    ...inputBase
-                }
-            }}
-            onClick={(e) => {
-                navigator.clipboard.writeText(formatTimecode(currentTime));
-                e.target.select();
-            }}
-            inputProps={{
-                readOnly: true,
-            }}
-        />
-    );
-
-    const renderComment = (comment, isReply = false, parentId = null, level = 0) => (
+    const renderComment = useCallback((comment, isReply = false, parentId = null, level = 0) => (
         <ListItem
             key={comment.id}
             id={`comment-${comment.id}`}
@@ -888,7 +738,7 @@ export const MediaAnnotator = () => {
             }}
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <IconButton size="small" onClick={(e) => { e.stopPropagation(); toggleDone(comment.id, isReply, parentId); }} sx={{ bgcolor: comment.done ? 'success.main' : 'background.paper', color: comment.done ? '#ffffff' : 'text.secondary', border: 1, borderColor: 'divider', '&:hover': { bgcolor: comment.done ? 'success.main' : 'action.hover' } }}>
                             <CheckIcon />
@@ -901,11 +751,7 @@ export const MediaAnnotator = () => {
                             <TextField
                                 value={editingTimecodeValue}
                                 onChange={(e) => setEditingTimecodeValue(e.target.value)}
-                                onKeyPress={(e) => {
-                                    if (e.key === 'Enter') {
-                                        editCommentTimecode(comment.id, editingTimecodeValue, isReply, parentId);
-                                    }
-                                }}
+                                onKeyPress={(e) => e.key === 'Enter' && editCommentTimecode(comment.id, editingTimecodeValue, isReply, parentId)}
                                 sx={{ width: 120 }}
                                 autoFocus
                             />
@@ -936,12 +782,8 @@ export const MediaAnnotator = () => {
                                 size="small"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if (editingTimecodeId === comment.id) {
-                                        setEditingTimecodeId(null);
-                                    } else {
-                                        setEditingTimecodeId(comment.id);
-                                        setEditingTimecodeValue(formatTimecode(comment.timecode));
-                                    }
+                                    setEditingTimecodeId(editingTimecodeId === comment.id ? null : comment.id);
+                                    setEditingTimecodeValue(formatTimecode(comment.timecode));
                                 }}
                                 sx={{ color: 'text.secondary' }}
                             >
@@ -979,11 +821,7 @@ export const MediaAnnotator = () => {
                     <TextField
                         value={editingCommentText}
                         onChange={(e) => setEditingCommentText(e.target.value)}
-                        onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                                editCommentText(comment.id, editingCommentText, isReply, parentId);
-                            }
-                        }}
+                        onKeyPress={(e) => e.key === 'Enter' && editCommentText(comment.id, editingCommentText, isReply, parentId)}
                         fullWidth
                         autoFocus
                         multiline
@@ -998,6 +836,10 @@ export const MediaAnnotator = () => {
                                 whiteSpace: 'pre-wrap',
                                 cursor: 'pointer',
                                 flexGrow: 1
+                            }}
+                            onClick={() => {
+                                seekToTimecode(comment.timecode);
+                                setSelectedComment(comment.id);
                             }}
                         >
                             {comment.text}
@@ -1052,16 +894,118 @@ export const MediaAnnotator = () => {
                 )}
             </Box>
         </ListItem>
-    );
+    ), [
+        selectedComment, editingTimecodeId, editingTimecodeValue, editingCommentId, editingCommentText,
+        replyTo, showDeleteConfirm, showDrawing, username, getUsernameColor, formatTimecode,
+        toggleDone, deleteComment, editCommentText, editCommentTimecode, seekToTimecode, addReply
+    ]);
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                if (e.target.id === 'comment-box' && e.key === 'Enter' && e.shiftKey) return;
+                if (e.key === 'Escape' && showDeleteConfirm) {
+                    setShowDeleteConfirm(null);
+                    e.preventDefault();
+                }
+                return;
+            }
+
+            const keyActions = {
+                ' ': () => { e.preventDefault(); handlePlayPause(); },
+                'ArrowLeft': () => { e.preventDefault(); handleSkip(-5); },
+                'ArrowRight': () => { e.preventDefault(); handleSkip(5); },
+                'ArrowUp': () => { e.preventDefault(); handleVolumeChange({ target: { value: Math.min(volume + 0.1, 1) } }); },
+                'ArrowDown': () => { e.preventDefault(); handleVolumeChange({ target: { value: Math.max(volume - 0.1, 0) } }); },
+                'Enter': () => { if (newComment) { e.preventDefault(); addComment(); } },
+                'z': () => { if (e.ctrlKey && !e.shiftKey) { e.preventDefault(); undo(); } },
+                'Z': () => { if (e.ctrlKey && e.shiftKey) { e.preventDefault(); redo(); } },
+                'Escape': () => {
+                    setReplyTo(null);
+                    setDrawingMode(false);
+                    setShowDeleteConfirm(null);
+                    if (isFullScreen) {
+                        document.exitFullscreen();
+                        setIsFullScreen(false);
+                    }
+                },
+                'Control+Enter': () => { e.preventDefault(); document.getElementById('comment-box')?.focus(); },
+            };
+
+            if (keyActions[e.key]) {
+                keyActions[e.key]();
+            } else if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                e.preventDefault();
+                document.getElementById('comment-box')?.focus();
+            }
+        };
+
+        const handleWheel = (e) => {
+            if (e.shiftKey && e.altKey) {
+                e.preventDefault();
+                handleSkip(e.deltaY > 0 ? -60 : 60);
+            } else if (e.shiftKey) {
+                e.preventDefault();
+                handleVolumeChange({ target: { value: Math.max(Math.min(volume + (e.deltaY > 0 ? -0.1 : 0.1), 1), 0) } });
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('wheel', handleWheel);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('wheel', handleWheel);
+        };
+    }, [handlePlayPause, handleSkip, newComment, drawingMode, volume, undo, redo, isFullScreen, showDeleteConfirm, addComment]);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const resizeCanvas = () => {
+            if (mediaRef.current) {
+                canvas.width = mediaRef.current.offsetWidth;
+                canvas.height = mediaRef.current.offsetHeight;
+                drawOnCanvas();
+            }
+        };
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        return () => window.removeEventListener('resize', resizeCanvas);
+    }, [mediaUrl, showDrawing, currentDrawing, drawOnCanvas]);
+
+    useEffect(() => {
+        const autoSaveInterval = setInterval(() => {
+            if (unsavedChanges) saveBackup();
+        }, 300000);
+
+        return () => clearInterval(autoSaveInterval);
+    }, [unsavedChanges, saveBackup]);
+
+    useEffect(() => {
+        const handleFullScreenChange = () => {
+            setIsFullScreen(!!document.fullscreenElement);
+        };
+
+        document.addEventListener('fullscreenchange', handleFullScreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    }, []);
+
+    useEffect(() => {
+        if (replyTo && replyInputRef.current) {
+            replyInputRef.current.focus();
+        }
+    }, [replyTo]);
 
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
-            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', color: 'text.primary' }}>
+            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', color: 'text.primary', overflow: 'hidden' }}>
                 {showUsernameModal && (
                     <Dialog open={showUsernameModal} onClose={() => setShowUsernameModal(false)}>
                         <DialogTitle textAlign="center" variant="h4">Ms Media Reviewer</DialogTitle>
-                        <DialogTitle textAlign="center" variant="h4"sx={{color: 'red'}}>Important</DialogTitle>
+                        <DialogTitle textAlign="center" variant="h4" sx={{color: 'red'}}>Important</DialogTitle>
                         <DialogTitle>This app doesn't load the comments automatically. Comments files and backups will be stored/saved in the <b>Downloads</b> folder of your device. Import them manually.<br/> If you just received this html file, inside the folder containing it you'll find a json comment file to import</DialogTitle>
                         <DialogTitle>Enter Your Name</DialogTitle>
                         <DialogContent>
@@ -1095,14 +1039,22 @@ export const MediaAnnotator = () => {
                 )}
 
                 {!showUsernameModal && (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                         <AppBar position="static" sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', height: 60 }}>
                             <Toolbar>
-                                <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                                <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
                                     MS Media Reviewer - {mediaFilename} - {username}
                                 </Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                    <TimeCodeDisplay style={{ p: 0, width: 200 }} inputBase={{ fontSize: 30 }} />
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                    <TimeCodeDisplay
+                                        time={formatTimecode(currentTime)}
+                                        style={{ p: 0, width: 200 }}
+                                        inputBase={{ fontSize: 30 }}
+                                        onClick={(e) => {
+                                            navigator.clipboard.writeText(formatTimecode(currentTime));
+                                            e.target.select();
+                                        }}
+                                    />
                                     <IconButton color="inherit" onClick={toggleTheme}>
                                         {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
                                     </IconButton>
@@ -1110,24 +1062,14 @@ export const MediaAnnotator = () => {
                                         <InfoIcon /> Shortcuts
                                     </Button>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Typography variant="h5" sx={{
-                                            fontWeight: 'bold',
-                                            color: 'error.main',
-                                            ml: 1
-                                        }}>
+                                        <Typography variant="h5" noWrap sx={{ fontWeight: 'bold', color: 'error.main', ml: 1 }}>
                                             {lastSavedTime ? `Last saved ${getTimeSinceLastSave()} ago` : 'NEVER SAVED'}
                                         </Typography>
                                         <Button color='inherit' onClick={saveProject} disabled={!unsavedChanges} sx={{ bgcolor: '#989898' }}>
                                             <SaveIcon /> Save Comments
                                         </Button>
                                     </Box>
-                                    <input
-                                        type="file"
-                                        id="load-project"
-                                        accept=".json"
-                                        onChange={loadProject}
-                                        style={{ display: 'none' }}
-                                    />
+                                    <input type="file" id="load-project" accept=".json" onChange={loadProject} style={{ display: 'none' }} />
                                     <label htmlFor="load-project">
                                         <Button component="span" color="inherit">
                                             <FileDownloadIcon /> Add comments
@@ -1140,7 +1082,7 @@ export const MediaAnnotator = () => {
                                         </Button>
                                     </Box>
                                     <Button color="inherit" onClick={exportToEDL}>
-                                        <ShareIcon /> Export EDL
+                                        <FileDownloadIcon /> EDL
                                     </Button>
                                 </Box>
                             </Toolbar>
@@ -1170,17 +1112,7 @@ export const MediaAnnotator = () => {
                         )}
 
                         {showSaveConfirm && (
-                            <Dialog
-                                open={showSaveConfirm}
-                                onClose={() => setShowSaveConfirm(false)}
-                                sx={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    textAlign: 'center'
-                                }}
-                            >
+                            <Dialog open={showSaveConfirm} onClose={() => setShowSaveConfirm(false)} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
                                 <DialogTitle sx={{ color: '#4caf50', textAlign: 'center', fontSize: '1.5rem' }}>
                                     Project Saved
                                 </DialogTitle>
@@ -1192,38 +1124,8 @@ export const MediaAnnotator = () => {
                             </Dialog>
                         )}
 
-                        {showShareModal && (
-                            <Dialog open={showShareModal} onClose={() => setShowShareModal(false)}>
-                                <DialogTitle>Share Comments</DialogTitle>
-                                <DialogContent>
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={4}>
-                                            <Button variant="contained" color="primary" startIcon={<WhatsAppIcon />} fullWidth onClick={() => window.open(`https://wa.me/?text=Here's my comments`)}>
-                                                WhatsApp
-                                            </Button>
-                                        </Grid>
-                                        <Grid item xs={4}>
-                                            <Button variant="contained" color="primary" startIcon={<FacebookIcon />} fullWidth onClick={() => window.open(`https://www.facebook.com/dialog/send?link=&app_id=&redirect_uri=&display=page&quote=Here's my comments`)}>
-                                                Messenger
-                                            </Button>
-                                        </Grid>
-                                        <Grid item xs={4}>
-                                            <Button variant="contained" color="primary" startIcon={<EmailIcon />} fullWidth onClick={() => window.open(`mailto:?subject=Comments&body=Here's my comments`)}>
-                                                Email
-                                            </Button>
-                                        </Grid>
-                                    </Grid>
-                                </DialogContent>
-                                <DialogActions>
-                                    <Button onClick={() => setShowShareModal(false)} color="primary">
-                                        Close
-                                    </Button>
-                                </DialogActions>
-                            </Dialog>
-                        )}
-
                         <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-                            <Box sx={{ flex: 2.5, display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+                            <Box sx={{ flex: 2.5, display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider', bgcolor: 'background.paper', overflow: 'hidden' }}>
                                 {!mediaUrl ? (
                                     <Box {...getRootProps()} sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.paper', color: 'text.secondary', border: 2, borderColor: 'divider', borderStyle: 'dashed', m: 2, borderRadius: 2 }}>
                                         <Typography variant="h6">🎬</Typography>
@@ -1237,12 +1139,7 @@ export const MediaAnnotator = () => {
                                     </Box>
                                 ) : (
                                     <>
-                                        <Box sx={{
-                                            position: 'relative',
-                                            flex: 1,
-                                            bgcolor: 'black',
-                                            minHeight: isVideo ? 'auto' : '100px'
-                                        }}>
+                                        <Box sx={{ position: 'relative', flex: 1, bgcolor: 'black', minHeight: isVideo ? 'auto' : '100px', overflow: 'hidden' }}>
                                             {isVideo ? (
                                                 <video
                                                     ref={mediaRef}
@@ -1253,7 +1150,7 @@ export const MediaAnnotator = () => {
                                                     onDoubleClick={handleDoubleClick}
                                                     volume={volume}
                                                     muted={isMuted}
-                                                    style={{ width: '100%', height: '100%', outline: 'none' }}
+                                                    style={{ width: '100%', height: '100%', outline: 'none', objectFit: 'contain' }}
                                                 />
                                             ) : (
                                                 <audio
@@ -1282,14 +1179,7 @@ export const MediaAnnotator = () => {
                                             </IconButton>
                                         </Box>
 
-                                        <Box sx={{
-                                            px: 1,
-                                            py: 1,
-                                            bgcolor: darkMode ? 'grey.900' : 'grey.100',
-                                            borderTop: 1,
-                                            borderBottom: 1,
-                                            borderColor: 'divider'
-                                        }}>
+                                        <Box sx={{ px: 1, py: 1, bgcolor: darkMode ? 'grey.900' : 'grey.100', borderTop: 1, borderBottom: 1, borderColor: 'divider' }}>
                                             <Box
                                                 ref={progressBarRef}
                                                 sx={{
@@ -1299,119 +1189,49 @@ export const MediaAnnotator = () => {
                                                     position: 'relative',
                                                     borderRadius: 1,
                                                     width: '100%',
-                                                    '&:hover': {
-                                                        bgcolor: darkMode ? 'grey.600' : 'grey.400'
-                                                    }
+                                                    '&:hover': { bgcolor: darkMode ? 'grey.600' : 'grey.400' }
                                                 }}
                                                 onClick={handleSeek}
-                                                onMouseMove={(e) => {
-                                                    if (!hoveringMarker) {
-                                                        const rect = progressBarRef.current.getBoundingClientRect();
-                                                        const pos = (e.clientX - rect.left) / rect.width;
-                                                        setHoverTime(pos * duration);
-                                                        setHoverPosition(e.clientX - rect.left);
-                                                    }
-                                                }}
-                                                onMouseLeave={() => {
-                                                    if (!hoveringMarker) {
-                                                        setHoverTime(null);
-                                                    }
-                                                }}
+                                                onMouseMove={handleProgressHover}
+                                                onMouseLeave={() => !hoveringMarker && setHoverTime(null)}
                                             >
-                                                <Box
-                                                    sx={{
-                                                        height: '100%',
-                                                        bgcolor: 'red',
-                                                        width: `${(currentTime / duration) * 100}%`,
-                                                        transition: 'width 0.1s linear',
-                                                        position: 'relative',
-                                                        zIndex: 1
-                                                    }}
-                                                />
+                                                <Box sx={{ height: '100%', bgcolor: 'red', width: `${(currentTime / duration) * 100}%`, transition: 'width 0.1s linear', position: 'relative', zIndex: 1 }} />
 
                                                 {hoverTime !== null && !hoveringMarker && (
-                                                    <Box
-                                                        sx={{
-                                                            position: 'absolute',
-                                                            top: -30,
-                                                            transform: 'translateX(-50%)',
-                                                            bgcolor: 'rgb(25,77,140)',
-                                                            color: '#ffffff',
-                                                            px: 1,
-                                                            py: 0.5,
-                                                            borderRadius: 1,
-                                                            fontSize: 15,
-                                                            pointerEvents: 'none',
-                                                            whiteSpace: 'nowrap',
-                                                            zIndex: 998
-                                                        }}
-                                                        style={{ left: `${hoverPosition}px` }}
-                                                    >
+                                                    <Box sx={{
+                                                        position: 'absolute',
+                                                        top: -30,
+                                                        transform: 'translateX(-50%)',
+                                                        bgcolor: 'rgb(25,77,140)',
+                                                        color: '#ffffff',
+                                                        px: 1,
+                                                        py: 0.5,
+                                                        borderRadius: 1,
+                                                        fontSize: 15,
+                                                        pointerEvents: 'none',
+                                                        whiteSpace: 'nowrap',
+                                                        zIndex: 998
+                                                    }} style={{ left: `${hoverPosition}px` }}>
                                                         {formatTimecode(hoverTime)}
                                                     </Box>
                                                 )}
                                                 {comments // Markers DD
                                                     .filter(comment => !comment.replies.length && (!hideDone || !comment.done))
                                                     .map(comment => (
-                                                        <Box
+                                                        <CommentMarker
                                                             key={comment.id}
-                                                            sx={{
-                                                                position: 'absolute',
-                                                                top: -20,
-                                                                left: `${(comment.timecode / duration) * 100}%`,
-                                                                transform: 'translateX(-50%)',
-                                                                width: 10,
-                                                                height: 20,
-                                                                bgcolor: getUsernameColor(comment.username),
-                                                                borderBottomLeftRadius: '100%',
-                                                                borderBottomRightRadius: '100%',
-                                                                cursor: 'pointer',
-                                                                zIndex: 999
-                                                            }}
-                                                            onClick={() => {
-                                                                seekToTimecode(comment.timecode);
-                                                                setSelectedComment(comment.id);
-                                                                commentsScrollRef.current.scrollTo({
-                                                                    top: document.getElementById(`comment-${comment.id}`).offsetTop - commentsScrollRef.current.offsetTop,
-                                                                    behavior: 'smooth'
-                                                                });
-                                                            }}
-                                                            onMouseEnter={() => {
-                                                                setHoveringMarker(true);
-                                                                setSelectedComment(comment.id);
-                                                            }}
-                                                            onMouseLeave={() => {
-                                                                setHoveringMarker(false);
-                                                                setSelectedComment(null);
-                                                            }}
-                                                        >
-                                                            {selectedComment === comment.id && (
-                                                                <Box
-                                                                    sx={{
-                                                                        position: 'absolute',
-                                                                        top: -40,
-                                                                        left: '50%',
-                                                                        transform: 'translateX(-50%)',
-                                                                        bgcolor: getUsernameColor(comment.username),
-                                                                        px: 1,
-                                                                        py: 0.5,
-                                                                        borderRadius: 1,
-                                                                        fontSize: 20,
-                                                                        pointerEvents: 'none',
-                                                                        whiteSpace: 'nowrap',
-                                                                        color: '#000000',
-                                                                        zIndex: 9999
-                                                                    }}
-                                                                >
-                                                                    {comment.username}
-                                                                </Box>
-                                                            )}
-                                                        </Box>
+                                                            comment={comment}
+                                                            duration={duration}
+                                                            seekToTimecode={seekToTimecode}
+                                                            selectedComment={selectedComment}
+                                                            setSelectedComment={setSelectedComment}
+                                                            getUsernameColor={getUsernameColor}
+                                                        />
                                                     ))}
                                             </Box>
                                         </Box>
 
-                                        <Box sx={{ bgcolor: 'background.paper', display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', borderTop: 1, borderColor: 'divider' }}>
+                                        <Box sx={{ bgcolor: 'background.paper', display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', borderTop: 1, borderColor: 'divider', p: 1 }}>
                                             <Button variant="contained" color="primary" onClick={handlePlayPause}>
                                                 {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
                                             </Button>
@@ -1421,7 +1241,10 @@ export const MediaAnnotator = () => {
                                             <Button variant="contained" onClick={() => handleFrameStep(-1)}>
                                                 <SkipPreviousIcon /> Frame
                                             </Button>
-                                            <TimeCodeDisplay />
+                                            <TimeCodeDisplay time={formatTimecode(currentTime)} onClick={(e) => {
+                                                navigator.clipboard.writeText(formatTimecode(currentTime));
+                                                e.target.select();
+                                            }} />
                                             <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                                                 / {formatTimecode(duration)}
                                             </Typography>
@@ -1491,7 +1314,7 @@ export const MediaAnnotator = () => {
                                                 />
                                             </Box>
                                         </Box>
-                                        <Box sx={{ bgcolor: 'background.paper', display: 'flex', gap: 1, borderTop: 1, borderColor: 'divider' }}>
+                                        <Box sx={{ bgcolor: 'background.paper', display: 'flex', gap: 1, borderTop: 1, borderColor: 'divider', p: 1 }}>
                                             <TextField
                                                 id="comment-box"
                                                 value={newComment}
@@ -1517,26 +1340,18 @@ export const MediaAnnotator = () => {
                             </Box>
 
                             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default' }}>
-                                <Box sx={{ p: 1, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Box sx={{ p: 1, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                         <Typography variant="body2">Sort by:</Typography>
                                         <FormControl sx={{ minWidth: 120 }}>
-                                            <Select
-                                                value={sortBy}
-                                                onChange={(e) => setSortBy(e.target.value)}
-                                                displayEmpty
-                                            >
+                                            <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} displayEmpty>
                                                 {sortOptions.map(option => (
                                                     <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
                                         <FormControl sx={{ minWidth: 120 }}>
-                                            <Select
-                                                value={sortOrder}
-                                                onChange={(e) => setSortOrder(e.target.value)}
-                                                displayEmpty
-                                            >
+                                            <Select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} displayEmpty>
                                                 {orderOptions.map(option => (
                                                     <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
                                                 ))}
@@ -1544,13 +1359,7 @@ export const MediaAnnotator = () => {
                                         </FormControl>
                                     </Box>
                                     <FormControlLabel
-                                        control={
-                                            <Switch
-                                                checked={hideDone}
-                                                onChange={(e) => setHideDone(e.target.checked)}
-                                                color="primary"
-                                            />
-                                        }
+                                        control={<Switch checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} color="primary" />}
                                         label="Hide completed"
                                     />
                                 </Box>
@@ -1561,9 +1370,7 @@ export const MediaAnnotator = () => {
                                         flex: 1,
                                         overflowY: 'auto',
                                         p: 1,
-                                        '&::-webkit-scrollbar': {
-                                            width: '10px',
-                                        },
+                                        '&::-webkit-scrollbar': { width: '10px' },
                                         '&::-webkit-scrollbar-thumb': {
                                             backgroundColor: darkMode ? '#555' : '#ccc',
                                             borderRadius: '5px',
