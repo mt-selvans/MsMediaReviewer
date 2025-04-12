@@ -49,6 +49,7 @@ import {
     Share as ShareIcon,
 } from '@mui/icons-material';
 import { useDropzone } from 'react-dropzone';
+import {MediaReviewerData} from "./MediaReviewerData";
 
 const TimeCodeDisplay = ({ time, style, inputBase, onClick }) => (
     <TextField
@@ -181,7 +182,7 @@ export const MediaAnnotator = () => {
     const [drawingMode, setDrawingMode] = useState(false);
     const [currentDrawing, setCurrentDrawing] = useState([]);
     const [showDrawing, setShowDrawing] = useState(null);
-    const [lineWidth, setLineWidth] = useState(3);
+    const [lineWidth, setLineWidth] = useState(15);
     const [sortBy, setSortBy] = useState('timecode');
     const [sortOrder, setSortOrder] = useState('asc');
     const [hideDone, setHideDone] = useState(false);
@@ -766,31 +767,6 @@ export const MediaAnnotator = () => {
         toggleFullScreen();
     }, [toggleFullScreen]);
 
-    const shortcuts = [
-        { key: 'Space', description: 'Play/Pause' },
-        { key: '← →', description: 'Skip 5 seconds' },
-        { key: '↑ ↓', description: 'Volume control' },
-        { key: 'Ctrl+Z', description: 'Undo' },
-        { key: 'Ctrl+Shift+Z', description: 'Redo' },
-        { key: 'Esc', description: 'Cancel drawing/reply/exit fullscreen' },
-        { key: 'Ctrl+Shift+C', description: 'Focus comment box' },
-        { key: 'Shift+MouseWheel', description: 'Volume control' },
-        { key: 'Shift+Alt+MouseWheel', description: 'Seek 1 minute' },
-        { key: 'Double click video', description: 'Enter/Exit full screen video' },
-    ];
-
-    const sortOptions = [
-        { value: 'timecode', label: 'Timecode' },
-        { value: 'created', label: 'Creation Time' },
-    ];
-
-    const orderOptions = [
-        { value: 'asc', label: 'Ascending' },
-        { value: 'desc', label: 'Descending' },
-    ];
-
-    const playbackSpeeds = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
-
     const renderComment = useCallback((comment, isReply = false, parentId = null, level = 0) => (
         <ListItem
             key={comment.id}
@@ -1167,7 +1143,7 @@ export const MediaAnnotator = () => {
                                 <DialogTitle>Keyboard Shortcuts</DialogTitle>
                                 <DialogContent>
                                     <Grid container spacing={2} direction="column">
-                                        {shortcuts.map((shortcut, index) => (
+                                        {MediaReviewerData.shortcuts.map((shortcut, index) => (
                                             <Grid item key={index}>
                                                 <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
                                                     {shortcut.key}
@@ -1372,7 +1348,7 @@ export const MediaAnnotator = () => {
                                                     onChange={(e) => handleRateChange(parseFloat(e.target.value))}
                                                     sx={{ width: 80 }}
                                                 >
-                                                    {playbackSpeeds.map(speed => (
+                                                    {MediaReviewerData.playbackSpeeds.map(speed => (
                                                         <MenuItem key={speed} value={speed}>{speed}x</MenuItem>
                                                     ))}
                                                 </Select>
@@ -1423,14 +1399,14 @@ export const MediaAnnotator = () => {
                                         <Typography variant="body2">Sort by:</Typography>
                                         <FormControl sx={{ minWidth: 120 }}>
                                             <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} displayEmpty>
-                                                {sortOptions.map(option => (
+                                                {MediaReviewerData.sortOptions.map(option => (
                                                     <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
                                         <FormControl sx={{ minWidth: 120 }}>
                                             <Select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} displayEmpty>
-                                                {orderOptions.map(option => (
+                                                {MediaReviewerData.orderOptions.map(option => (
                                                     <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
                                                 ))}
                                             </Select>
