@@ -206,6 +206,7 @@ export const MediaAnnotator = () => {
     const commentsScrollRef = useRef(null);
     const [isDraggingMedia, setIsDraggingMedia] = useState(false);
     const [isDraggingComments, setIsDraggingComments] = useState(false);
+    const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
 
     useEffect(() => {
         const savedUsername = sessionStorage.getItem('annotator-username');
@@ -322,6 +323,10 @@ export const MediaAnnotator = () => {
     const handleLoadedMetadata = useCallback(() => {
         setDuration(mediaRef.current.duration);
         if (isVideo) {
+            setVideoDimensions({
+                width: mediaRef.current.videoWidth,
+                height: mediaRef.current.videoHeight
+            });
             mediaRef.current.requestVideoFrameCallback((now, metadata) => {
                 setFrameRate(metadata.mediaTime === 0 ? 24 : 1 / (metadata.mediaTime - currentTime));
             });
@@ -393,8 +398,59 @@ export const MediaAnnotator = () => {
             : hours * 3600 + minutes * 60 + seconds + framesOrMs / 1000;
     }, [isVideo, frameRate]);
 
+    const normalizeDrawingCoordinates = useCallback((drawing, canvasWidth, canvasHeight) => {
+        if (!videoDimensions.width || !videoDimensions.height) return drawing;
+
+        const aspectRatio = videoDimensions.width / videoDimensions.height;
+        let targetWidth, targetHeight;
+
+        if (canvasWidth / canvasHeight > aspectRatio) {
+            targetHeight = canvasHeight;
+            targetWidth = canvasHeight * aspectRatio;
+        } else {
+            targetWidth = canvasWidth;
+            targetHeight = canvasWidth / aspectRatio;
+        }
+
+        const offsetX = (canvasWidth - targetWidth) / 2;
+        const offsetY = (canvasHeight - targetHeight) / 2;
+
+        return drawing.map(point => ({
+            ...point,
+            x: ((point.x - offsetX) / targetWidth) * videoDimensions.width,
+            y: ((point.y - offsetY) / targetHeight) * videoDimensions.height
+        }));
+    }, [videoDimensions]);
+
+    const denormalizeDrawingCoordinates = useCallback((drawing, canvasWidth, canvasHeight) => {
+        if (!videoDimensions.width || !videoDimensions.height || !drawing) return drawing;
+
+        const aspectRatio = videoDimensions.width / videoDimensions.height;
+        let targetWidth, targetHeight;
+
+        if (canvasWidth / canvasHeight > aspectRatio) {
+            targetHeight = canvasHeight;
+            targetWidth = canvasHeight * aspectRatio;
+        } else {
+            targetWidth = canvasWidth;
+            targetHeight = canvasWidth / aspectRatio;
+        }
+
+        const offsetX = (canvasWidth - targetWidth) / 2;
+        const offsetY = (canvasHeight - targetHeight) / 2;
+
+        return drawing.map(point => ({
+            ...point,
+            x: (point.x / videoDimensions.width) * targetWidth + offsetX,
+            y: (point.y / videoDimensions.height) * targetHeight + offsetY
+        }));
+    }, [videoDimensions]);
+
     const addComment = useCallback(() => {
         if (!newComment.trim() && !currentDrawing.length) return;
+
+        const canvas = canvasRef.current;
+        const normalizedDrawing = normalizeDrawingCoordinates(currentDrawing, canvas.width, canvas.height);
 
         const comment = {
             id: nextCommentId,
@@ -403,7 +459,7 @@ export const MediaAnnotator = () => {
             text: newComment,
             replies: [],
             done: false,
-            drawing: currentDrawing.length ? currentDrawing : null,
+            drawing: normalizedDrawing.length ? normalizedDrawing : null,
             lineWidth: currentDrawing.length ? lineWidth : null,
             createdAt: new Date().toISOString()
         };
@@ -414,7 +470,7 @@ export const MediaAnnotator = () => {
         setDrawingMode(false);
         setUnsavedChanges(true);
         setNextCommentId(nextCommentId >= 9999 ? 1 : nextCommentId + 1);
-    }, [newComment, currentDrawing, nextCommentId, username, currentTime, lineWidth, comments]);
+    }, [newComment, currentDrawing, nextCommentId, username, currentTime, lineWidth, comments, normalizeDrawingCoordinates]);
 
     const addReply = useCallback((commentId, parentComment = null, level = 0) => {
         if (!replyText.trim() || level > 10) return;
@@ -600,8 +656,11 @@ export const MediaAnnotator = () => {
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const drawingToShow = showDrawing || currentDrawing;
-        if (drawingToShow.length > 0) {
+        const drawingToShow = showDrawing ?
+            denormalizeDrawingCoordinates(showDrawing, canvas.width, canvas.height) :
+            currentDrawing;
+
+        if (drawingToShow && drawingToShow.length > 0) {
             ctx.beginPath();
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
@@ -618,7 +677,7 @@ export const MediaAnnotator = () => {
 
             ctx.stroke();
         }
-    }, [showDrawing, currentDrawing, lineWidth]);
+    }, [showDrawing, currentDrawing, lineWidth, denormalizeDrawingCoordinates]);
 
     const undo = useCallback(() => {
         if (currentDrawing.length === 0) return;
@@ -863,7 +922,11 @@ export const MediaAnnotator = () => {
                 </Box>
 
                 {comment.drawing && (
-                    <Button size="small" onClick={(e) => { e.stopPropagation(); setShowDrawing(showDrawing === comment.drawing ? null : comment.drawing); }}>
+                    <Button
+                        size="small"
+                        onClick={(e) => { e.stopPropagation(); setShowDrawing(showDrawing === comment.drawing ? null : comment.drawing); }}
+                        sx={{width: '30%', bgcolor: '#838383'}}
+                    >
                         {showDrawing === comment.drawing ? 'Hide Drawing' : 'View Drawing'}
                     </Button>
                 )}
@@ -1269,7 +1332,7 @@ export const MediaAnnotator = () => {
                                                         {formatTimecode(hoverTime)}
                                                     </Box>
                                                 )}
-                                                {comments // Markers DD
+                                                {comments
                                                     .filter(comment => !comment.replies.length && (!hideDone || !comment.done))
                                                     .map(comment => (
                                                         <CommentMarker
@@ -1320,19 +1383,6 @@ export const MediaAnnotator = () => {
                                                 }}>
                                                     {drawingMode ? <CloseIcon /> : <EditIcon />}
                                                 </Button>
-                                                {drawingMode && (
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                        <Typography variant="body2">Size:</Typography>
-                                                        <Slider
-                                                            value={lineWidth}
-                                                            onChange={(e, value) => setLineWidth(value)}
-                                                            min={1}
-                                                            max={20}
-                                                            valueLabelDisplay="auto"
-                                                            sx={{ width: 80 }}
-                                                        />
-                                                    </Box>
-                                                )}
                                             </Box>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                 <Button variant="contained" color="secondary" onClick={undo} disabled={currentDrawing.length === 0}>

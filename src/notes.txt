@@ -1,14 +1,28 @@
-request1-If video is paused and user clicks a comment marker, the comment highlights but as soon as user stops hovering over the marker, comment stops being highlighted. keep comment highlighted until user selects another marker or selects another comment in the comment column.
+request 1-when a drawing gets deleted make sure that the drawing get deleted/hidden from the video column instantly as well.
+request 2-delete this component and everything that is only used by it.
+`{drawingMode && (
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                        <Typography variant="body2">Size:</Typography>
+                                                        <Slider
+                                                            value={lineWidth}
+                                                            onChange={(e, value) => setLineWidth(value)}
+                                                            min={1}
+                                                            max={20}
+                                                            valueLabelDisplay="auto"
+                                                            sx={{ width: 80 }}
+                                                        />
+                                                    </Box>
+                                                )}`
+    HOW SHOULD YOU OPERATE
+    Please keep everything tidy, easy to understand and compressed whenever .map methods or reusable components are practical, implement them to avoid repeating code
+    please confirm that you have addressed each issue listed because you are skipping them
+    write the WHOLE UPDATED CODE please ensuring you don't break anything.
 
-request2-If video is paused and user clicks on a comment or a comment's marker, move video's timecode to comment's timecode BUT DON't PLAY the video.If video is playing and user clicks on a comment or a comment's marker, move video's timecode to comment's timecode and PLAY the video.
+    IT'S IMPERATIVE YOU WRITE THE WHOLE UPDATED CODE, BEFORE STARTING WRITING ANYTHING PLEASE CONFIRM ME YOU'LL WRITE THE WHOLE UPDATED CODE WITHOUT SKIPPING A SINGLE LINE
+    I DON'T WANT ANY `...REST OF THE CODE` i WANT ALL THE UPDATED CODE
+    ReactJs in jsx file code
 
-HOW SHOULD YOU OPERATE
-Please keep everything tidy, easy to understand and compressed whenever .map methods or reusable components are practical, implement them to avoid repeating code
-please confirm that you have addressed each issue listed because you are skipping them
-write the WHOLE UPDATED CODE please ensuring you don't break anything.
-If a comment hast `DD` (don't delete) please don't delete it
-IT'S IMPERATIVE YOU WRITE THE WHOLE UPDATED CODE, BEFORE STARTING WRITING ANYTHING PLEASE CONFIRM ME YOU'LL WRITE THE WHOLE UPDATED CODE WITHOUT SKIPPING A SINGLE LINE
-I DON'T WANT ANY `...REST OF THE CODE` i WANT ALL THE UPDATED CODE
-ReactJs in jsx file code
+important request- when a drawing is made, it's position is currently registered statically when saved. If the <Video> element get resized the drawing doesn't.
+It's imperative that the drawing's size remains relative to the video's apsect ratio, so if it's 16:9 it should stay relative and anchored to that, 1:1 anchored to that etc...
 
 featureRequest- create a functional component that adds an "i" icon to appBar , when click diplay a window vertically and horziontally centered displaying all the video's metadata. this component will be written in a new page and imported to this one.
