@@ -279,7 +279,8 @@ export const MediaAnnotator = () => {
             'audio/*': ['.mp3', '.wav', '.ogg', '.m4a']
         },
         onDragEnter: () => setIsDraggingMedia(true),
-        onDragLeave: () => setIsDraggingMedia(false)
+        onDragLeave: () => setIsDraggingMedia(false),
+        noKeyboard: true
     });
 
     const {
@@ -293,7 +294,8 @@ export const MediaAnnotator = () => {
         },
         onDragEnter: () => setIsDraggingComments(true),
         onDragLeave: () => setIsDraggingComments(false),
-        noClick: true
+        noClick: true,
+        noKeyboard: true
     });
 
     const handlePlayPause = useCallback(() => {
