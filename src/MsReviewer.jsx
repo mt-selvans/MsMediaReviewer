@@ -552,7 +552,6 @@ export const MediaAnnotator = () => {
     const seekToTimecode = useCallback((time) => {
         mediaRef.current.currentTime = time;
         setIsPlaying(true);
-        mediaRef.current.play();
         const comment = comments.find(c => c.timecode === time && c.drawing);
         setShowDrawing(comment ? comment.drawing : null);
         setSelectedComment(comment ? comment.id : null);
